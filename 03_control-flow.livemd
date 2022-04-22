@@ -1,0 +1,254 @@
+# 03. Control Flow
+
+## if and unless
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+if condition do
+...
+else
+...
+end
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+or
+
+<!-- livebook:{"break_markdown":true} -->
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+ if condition, do: something, else: another_thing
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+* Recall that everything in Elixir is an expression that has a return value. The `if` expression returns the result of the executed block (that is, of the block’s last expression). If the condition isn`t met and the `else` clause isn`t specified, the return value is the atom `nil`:
+
+<!-- livebook:{"break_markdown":true} -->
+
+* `unless` is equivalent of `if (not ...)`
+
+```elixir
+a = 1
+b = 2
+unless a >= b, do: b, else: a
+```
+
+## case
+
+```elixir
+result = {:ok, "test"}
+
+case result do
+  {:ok, content} -> IO.puts("It's ok: #{content}")
+  {:error, _reason} -> IO.puts("something got wrong")
+end
+```
+
+* The term pattern here indicates that it deals with pattern matching. In the `case` construct, the provided `expression` is evaluated, and then the result is matched against the given clauses. The first one that matches is executed, and the result of the corresponding block (its last expression) is the result of the entire `case` expression. If no clause matches, an error is raised.
+* The general `case` syntax can be directly translated into the multiclause functions approach
+
+## cond
+
+* The `cond` macro can be thought of as equivalent to an `if-else-if` pattern. It takes a list of expressions and executes the block of the first expression that evaluates to a truthy value:
+
+<!-- livebook:{"break_markdown":true} -->
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+cond do
+  expression_1 ->
+    ...
+
+  expression_2 ->
+    ...
+...
+end
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+* The result of `cond` is the result of the corresponding executed block. If none of the conditions is satisfied, `cond` raises an error.
+
+## with
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+with pattern_1 <- expression_1,
+     pattern_2 <- expression_2,
+     ...
+do
+  ...
+en
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+Examples
+
+```elixir
+with {:ok, login} <- {:ok, "alice"}, {:ok, email} <- {:ok, "some_email"} do
+  %{login: login, email: email}
+end
+
+%{email: "some_email", login: "alice"}
+```
+
+Here you went through two pattern matches to extract the login and the email. Then the `do` block is evaluated. The result of the `with` expression is the last result of the expression in the `do` block
+
+```elixir
+with {:ok, login} <- {:error, "login missing"}, {:ok, email} <- {:ok, "email"} do
+  %{login: login, email: email}
+end
+
+{:error, "login missing"}
+```
+
+## Practicing
+
+* A `list_len/1` function that calculates the length of a list
+* A range/2 function that takes two integers, from and to, and returns a list of all integer numbers in the given range
+* A positive/1 function that takes a list and returns another list that contains only the positive numbers from the input list
+
+```elixir
+defmodule LoopsAndIterations.Lists do
+  # Len
+
+  def len(list) when is_list(list) do
+    calculate_length(0, list)
+  end
+
+  defp calculate_length(sum, []) do
+    sum
+  end
+
+  defp calculate_length(sum, [_head | tail]) do
+    calculate_length(sum + 1, tail)
+  end
+
+  # Range
+
+  def range(from, to) when is_integer(from) and is_integer(from) do
+    create_range_numbers([], from, to)
+  end
+
+  defp create_range_numbers(range, from, to) when from > to do
+    range
+  end
+
+  defp create_range_numbers(range, from, to) do
+    range = [to | range]
+    create_range_numbers(range, from, to - 1)
+  end
+
+  # Positive
+
+  def positive(list) when is_list(list) do
+    remove_negative_number([], list)
+  end
+
+  defp remove_negative_number(positive_list, []) do
+    positive_list
+  end
+
+  defp remove_negative_number(positive_list, [full_h | full_t]) when full_h >= 0 do
+    positive_list = positive_list ++ [full_h]
+    remove_negative_number(positive_list, full_t)
+  end
+
+  defp remove_negative_number(positive_list, [_full_h | full_t]) do
+    remove_negative_number(positive_list, full_t)
+  end
+end
+```
+
+```elixir
+ExUnit.start(autorun: false)
+
+defmodule LoopsAndIterations.ListsTest do
+  use ExUnit.Case
+  alias LoopsAndIterations.Lists
+
+  describe "len/1" do
+    test "given a list with N elements, should return N" do
+      # arrange
+      list = ["a", "b", "c"]
+
+      # act
+      length = Lists.len(list)
+
+      # assert
+      assert length == 3
+    end
+  end
+
+  describe "range/2" do
+    test "given two integers, should return the range between them" do
+      # arrange
+      from = 0
+      to = 5
+
+      # act
+      range = Lists.range(from, to)
+
+      # assert
+      assert range == [0, 1, 2, 3, 4, 5]
+    end
+  end
+
+  describe "positive/1" do
+    test "given a list with positive and negative numbers, should return a list with only positive elements" do
+      # arrange
+      list = [0, -2, 4, -7, 1, 2, -8, -20, -4, 10]
+
+      # act
+      positive_list = Lists.positive(list)
+
+      # assert
+      assert positive_list == [0, 4, 1, 2, 10]
+    end
+  end
+end
+
+ExUnit.run()
+```
+
+## Higher-order functions
+
+A _higher_order function_ is a function that takes one or more functions as its inputs or retuns one or more functions.
+
+```elixir
+Enum.each([1, 2, 3], fn x -> IO.puts(x) end)
+```
+
+## Comprehentions
+
+```elixir
+for x <- [1, 2, 3] do
+  x * x
+end
+```
+
+```elixir
+for x <- [1, 2, 3], y <- [1, 2, 3], do: {x, y, x * y}
+```
+
+## Stream
+
+```elixir
+["Guilherme", "Juliana", "Luna", "Maria"]
+|> Enum.with_index()
+|> Enum.each(fn {employee, index} ->
+  IO.puts("#{index + 1}: #{employee}")
+end)
+```
+
+```elixir
+[1, 2, 3] |> Stream.map(fn x -> 2 * x end)
+```
