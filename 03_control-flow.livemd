@@ -227,13 +227,30 @@ A _higher_order function_ is a function that takes one or more functions as its 
 Enum.each([1, 2, 3], fn x -> IO.puts(x) end)
 ```
 
+```elixir
+defmodule NumberHelper do
+  def sum_nums(enumerable) do
+    Enum.reduce(enumerable, 0, &add_num/2)
+  end
+
+  defp add_num(num, sum) when is_number(num), do: sum + num
+  defp add_num(_, sum), do: sum
+end
+
+NumberHelper.sum_nums([1, 2, 3])
+```
+
 ## Comprehentions
+
+The cryptic “comprehensions” name denotes another construct that can help you iterate and transform enumerables
 
 ```elixir
 for x <- [1, 2, 3] do
   x * x
 end
 ```
+
+The comprehension iterates through each element and runs the `do/end` block. The result is a list that contains all the results returned by the `do/end` block. In this basic form, `for` is no different than `Enum.map/2`.
 
 ```elixir
 for x <- [1, 2, 3], y <- [1, 2, 3], do: {x, y, x * y}
@@ -242,13 +259,79 @@ for x <- [1, 2, 3], y <- [1, 2, 3], do: {x, y, x * y}
 ## Stream
 
 ```elixir
+[1, 2, 3] |> Stream.map(fn x -> 2 * x end)
+```
+
+Stream is lazy, they don't run immediately
+
+```elixir
 ["Guilherme", "Juliana", "Luna", "Maria"]
-|> Enum.with_index()
+|> Stream.with_index()
 |> Enum.each(fn {employee, index} ->
   IO.puts("#{index + 1}: #{employee}")
 end)
 ```
 
 ```elixir
-[1, 2, 3] |> Stream.map(fn x -> 2 * x end)
+defmodule StreamExamples do
+  def large_lines!(path) do
+    File.stream!(path)
+    |> Stream.map(&String.replace(&1, "\n", ""))
+    |> Enum.filter(&(String.length(&1) > 80))
+  end
+end
+
+StreamExamples.large_lines!("./04_data-abstractions.livemd")
 ```
+
+Here you rely on the `File.stream!/1` function, which takes the path of a file and returns a stream of its lines. Because the result is a stream, the iteration through the file happens only when you request it. After `File.stream!` returns, no byte from the file has been read yet. Then you remove the trailing newline character from each line, again in the lazy manner. Finally, you eagerly take only long lines, using `Enum.filter/2`. It's at this point that iteration happens. The consequence is that you never read the entire file in memory; instead, you work on each line individually.
+
+## Practicing
+
+* A `lines_lengths!/1` that takes a file path and returns a list of numbers, with each number representing the length of the corresponding line from the file.
+* A `longest_line_length!/1` that returns the length of the longest line in a file.
+* A `longest_line!/1` that returns the contents of the longest line in a file.
+* A `words_per_line!/1` that returns a list of numbers, with each number representing the word count in a file. Hint: to get the word count of a line, use `length(String.split(line))`.
+
+```elixir
+defmodule HighOrderFunctions.Practicing do
+  def lines_lengths!(path) do
+    File.stream!(path)
+    |> Stream.map(fn line -> String.length(line) end)
+    |> Enum.each(fn x -> IO.puts(x) end)
+  end
+
+  def longest_line_length!(path) do
+    File.stream!(path)
+    |> Stream.map(fn line -> String.length(line) end)
+    |> Enum.max()
+  end
+
+  def longest_line!(path) do
+    File.stream!(path)
+    |> Enum.max_by(&String.length/1)
+  end
+
+  def words_per_line!(path) do
+    File.stream!(path)
+    |> Stream.map(fn line -> length(String.split(line)) end)
+    |> Enum.each(fn x -> IO.puts(x) end)
+  end
+end
+
+path = "./04_data-abstractions.livemd"
+
+IO.puts("lines_lengths!/1: ")
+HighOrderFunctions.Practicing.lines_lengths!(path)
+
+IO.puts("\nlongest_line_length/1: ")
+HighOrderFunctions.Practicing.longest_line_length!(path) |> IO.inspect()
+
+IO.puts("\nlongest_line/1: ")
+HighOrderFunctions.Practicing.longest_line!(path) |> IO.inspect()
+
+IO.puts("\nwords_per_line/1: ")
+HighOrderFunctions.Practicing.words_per_line!(path)
+```
+
+
