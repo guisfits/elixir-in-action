@@ -1,0 +1,87 @@
+# 04. Data Abstractions
+
+## Basics
+
+Types in Elixir are implemented with pure, stateless modules
+
+<!-- livebook:{"break_markdown":true} -->
+
+Different of OO that you call a method of a class (with state), Elixir provides Modules that is just a functions wrapper and all state that you need, you must pass through parameters
+
+<!-- livebook:{"break_markdown":true} -->
+
+* A module is in charge of abstracting some data.
+* The module's functions usually expect an instance of the data abstraction as the first argument.
+* Modifier functions return a modified version of the abstraction.
+* Query functions return some other type of data.
+
+## Structs
+
+In Elixir you can define an _named map_ with _structs_, as follows:
+
+```elixir
+defmodule Fraction do
+  defstruct a: nil, b: nil
+end
+```
+
+keyword + initial values
+
+<!-- livebook:{"break_markdown":true} -->
+
+The name of the struct is the module's name
+
+```elixir
+one_half = %Fraction{a: 1, b: 2}
+```
+
+Is possible access individual fields with anyother map
+
+```elixir
+one_half.a
+```
+
+Pattern matches works as well
+
+```elixir
+%Fraction{a: a, b: b} = one_half
+b
+```
+
+Update a map it's similar to update a list
+
+```elixir
+one_quarter = %Fraction{one_half | b: 4}
+```
+
+Although structs it's like map, you can't do everything with structs that you do with maps. For instance, you can't use `Enum` module to a struct
+
+```elixir
+Enum.to_list(one_half)
+```
+
+But, you can still use `Map` module into a struct
+
+```elixir
+Map.to_list(one_half)
+```
+
+The `struct` field has an important consequence for pattern matching. A struct pattern can’t match a plain map:
+
+```elixir
+%Fraction{} = %{a: 1, b: 2}
+```
+
+But, a plain map pattern can match a struct
+
+```elixir
+%{a: a, b: b} = %Fraction{a: 2, b: 3}
+b
+```
+
+This is due to the way pattern matching works with maps. Remember, all fields from the pattern must exist in the matched term. When matching a map to a struct pattern, this isn't the case, because `%Fraction{}` contains the field `struct`, which isn't present in the map being matched.     
+The opposite works, because you match a struct to the `%{a: a, b: b}` pattern. Because all these fields exist in the `Fraction` struct, the match is successful.
+
+```elixir
+IO.puts(inspect(MapSet.new(), structs: false))
+```
