@@ -85,3 +85,26 @@ The opposite works, because you match a struct to the `%{a: a, b: b}` pattern. B
 ```elixir
 IO.puts(inspect(MapSet.new(), structs: false))
 ```
+
+## Protocols
+
+A _protocol_ is a module in which you declare functions without implement them. Consider it a rough equivalent of an OO interface. 
+To declare:
+
+```elixir
+defprotocol String.Chars do
+  def to_string(thing)
+end
+```
+
+To implement you start the implementation by calling the `defimpl` macro. Then you specify which protocol to implement and the corresponding data type. Finally, the `do/end` block contains the implementation of each protocol function.
+
+```elixir
+defimpl String.Chars, for: Integer do
+  def to_string(term) do
+    Integer.to_string(term)
+  end
+end
+```
+
+https://hexdocs.pm/elixir/Kernel.html#defprotocol/2
