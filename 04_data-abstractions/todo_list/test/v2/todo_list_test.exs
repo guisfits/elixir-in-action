@@ -54,14 +54,35 @@ defmodule V2.TodoListTest do
       new_todolist = TodoList.update_entry(todo_list, entry_id, &Map.put(&1, :date, new_date))
 
       # assert
-      {_, entry} =
-        Enum.find(
-          new_todolist.entries,
-          nil,
-          fn {id, _entry} -> id == entry_id end
-        )
-
+      {_id, entry} = find_entry(new_todolist, entry_id)
       assert entry.date == new_date
+    end
+  end
+
+  describe "delete_entry/2" do
+    test "Given a todo_list and a entry id, when this entry exists, should return a new todo_list without the entry" do
+      # arrange
+      todo_list = create_fullfil_todolist()
+      entry_id = 2
+
+      # act
+      new_todolist = TodoList.delete_entry(todo_list, entry_id)
+
+      # assert
+      entry = find_entry(new_todolist, entry_id)
+      assert is_nil(entry)
+    end
+
+    test "Given a todo_list and nonexisting entry_id, should return todo_list with no modifications" do
+      # arrange
+      todo_list = create_fullfil_todolist()
+      entry_id = 4
+
+      # act
+      new_todolist = TodoList.delete_entry(todo_list, entry_id)
+
+      # assert
+      assert Enum.count(todo_list.entries) == Enum.count(new_todolist.entries)
     end
   end
 
@@ -70,5 +91,13 @@ defmodule V2.TodoListTest do
     |> TodoList.add_entry(%{date: ~D[2000-12-31], title: "study"})
     |> TodoList.add_entry(%{date: ~D[2000-12-30], title: "gym"})
     |> TodoList.add_entry(%{date: ~D[2000-12-30], title: "work"})
+  end
+
+  defp find_entry(todo_list, entry_id) do
+    Enum.find(
+      todo_list.entries,
+      nil,
+      fn {id, _entry} -> id == entry_id end
+    )
   end
 end

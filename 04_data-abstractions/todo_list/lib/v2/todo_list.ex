@@ -34,4 +34,9 @@ defmodule V2.TodoList do
         %V2.TodoList{todo_list | entries: new_entries}
     end
   end
+
+  def delete_entry(todo_list, entry_id) do
+    new_entries = Map.delete(todo_list.entries, entry_id)
+    %V2.TodoList{todo_list | entries: new_entries}
+  end
 end
