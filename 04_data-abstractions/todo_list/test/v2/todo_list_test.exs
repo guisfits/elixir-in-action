@@ -3,13 +3,28 @@ defmodule V2.TodoListTest do
 
   alias V2.TodoList
 
-  describe "new/0" do
-    test "should return a new map" do
+  describe "new/1" do
+    test "when no entries are provided, should return a new empty TodoList" do
       # act
       todo_list = TodoList.new()
 
       # assert
       assert todo_list == %V2.TodoList{auto_id: 1, entries: %{}}
+    end
+
+    test "when entries are provided, should return a new TodoList with the entries" do
+      # arrange
+      entries = [
+        %{date: ~D[2018-12-19], title: "Dentist"},
+        %{date: ~D[2018-12-20], title: "Shopping"},
+        %{date: ~D[2018-12-19], title: "Movies"}
+      ]
+
+      # act
+      todo_list = TodoList.new(entries)
+
+      # assert
+      assert Enum.count(todo_list.entries) == 3
     end
   end
 

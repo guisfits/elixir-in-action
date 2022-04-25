@@ -1,7 +1,15 @@
 defmodule V2.TodoList do
   defstruct auto_id: 1, entries: %{}
 
-  def new(), do: %V2.TodoList{}
+  def new(entries \\ []) do
+    Enum.reduce(
+      entries,
+      %V2.TodoList{},
+      fn entry, todo_list_acc ->
+        add_entry(todo_list_acc, entry)
+      end
+    )
+  end
 
   def add_entry(todo_list, entry) do
     entry = Map.put(entry, :id, todo_list.auto_id)
