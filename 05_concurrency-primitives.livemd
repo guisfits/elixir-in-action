@@ -1,0 +1,179 @@
+# 05_Concurrency-primitives
+
+## Concurrency in Beam
+
+Erlang is all about writing highly available systems — systems that run forever and are always able to meaningfully respond to client requests. To make your system highly available, you have to tackle the following challenges:
+
+* Fault-tolerance — Minimize, isolate, and recover from the effects of runtime errors.
+* Scalability — Handle a load increase by adding more hardware resources without changing or redeploying the code.
+* Distribution — Run your system on multiple machines so that others can take over if one machine crashes.
+
+<!-- livebook:{"break_markdown":true} -->
+
+* By default, BEAM uses as many schedulers as there are CPU cores available
+* Each scheduler runs in its own thread, and the entire VM runs in a single OS process.
+* Data in Elixir is immutable. To keep it alive, you have to hold on to it, constantly passing the result of one function to another. A process can be considered a container of this data — a place where an immutable structure is stored and kept alive for a longer time, possibly forever.
+
+## Working with processes
+
+**Concurrency vs. parallelism**
+
+It's important to realize that concurrency doesn't necessarily imply parallelism. Two concurrent things have independent execution contexts, but this doesn't mean they will run in parallel. If you run two CPU-bound concurrent tasks and you only have one CPU core, parallel execution can't happen. You can achieve parallelism by adding more CPU cores and relying on an efficient concurrent framework. But you should be aware that concurrency itself doesn't necessarily speed things up.
+
+```elixir
+run_query = fn query_def ->
+  Process.sleep(2000)
+  "#{query_def} result"
+end
+```
+
+Here, the code sleeps for two seconds to simulate a long-running operation. When you call the run_query lambda, the shell is blocked until the lambda is done. Consequently, if you run five queries, it will take 10 seconds to get all the results:
+
+```elixir
+Enum.map(1..5, &run_query.("query #{&1}"))
+```
+
+To create a process, you can use the auto-imported `spawn/1` function. After the process is created, spawn immediately returns, and the caller process's execution continues
+
+```elixir
+async_query = fn query_def ->
+  spawn(fn -> IO.puts(run_query.(query_def)) end)
+end
+```
+
+```elixir
+Enum.each(1..5, &async_query.("query #{&1}"))
+```
+
+The call to `Enum.each/2` now returns immediately (in the first sequential version you had to wait 10 seconds for it to finish). Moreover, all the results are printed at practically the same time, two seconds later, which is a five-fold improvement over the sequential version. This happens because you run each computation concurrently.
+
+Also note that because processes run concurrently, the order of execution isn't guaranteed.
+
+## Message passing
+
+When process A wants process B to do something, it sends an asynchronous message to B. The content of the message is an Elixir term — anything you can store in a variable. Sending a message amounts to storing it into the receiver’s mailbox. The caller then continues with its own execution, and the receiver can pull the message in at any time and process it in some way. Because processes can’t share memory, a message is deep-copied when it’s sent.
+
+The process mailbox is a FIFO queue limited only by the available memory. The receiver consumes messages in the order received, and a message can be removed from the queue only if it's consumed.
+
+Use `send` from `Kernel` to sending a message:
+
+```elixir
+send(self(), "World")
+```
+
+```elixir
+receive do
+  message -> IO.puts("Hello, #{message}")
+after
+  5000 -> IO.puts("message not received")
+end
+```
+
+The receive expression works as follows:
+
+1. Take the first message from the mailbox.
+2. Try to match it against any of the provided patterns, going from top to bottom.
+3. If a pattern matches the message, run the corresponding code.
+4. If no pattern matches, put the message back into the mailbox at the same position it originally occupied. Then try the next message.
+5. If there are no more messages in the queue, wait for a new one to arrive. When a new message arrives, start from step 1, inspecting the first message in the mailbox.
+6. If the after clause is specified and no message is matched in the given amount of time, run the code from the after block.
+
+## Collecting query resuts
+
+You'll run queries in separate processes and print them to the screen from those processe
+
+```elixir
+run_query = fn query_def ->
+  Process.sleep(2000)
+  "#{query_def} result"
+end
+
+async_query = fn query_def ->
+  caller = self()
+
+  spawn(fn ->
+    send(caller, {:query_result, run_query.(query_def)})
+  end)
+end
+```
+
+```elixir
+Enum.each(1..5, &async_query.("query #{&1}"))
+```
+
+This runs all the queries concurrently, and the result is stored in the mailbox of the caller process. In this case, this is the shell (`iex`) process.    
+Notice that the caller process is neither blocked nor interrupted while receiving messages. Sending a message doesn’t disturb the receiving process in any way. If the process is performing computations, it continues to do so. The only thing affected is the content of the receiving process’s mailbox. Messages remain in the mailbox until they’re consumed or the process terminates.
+
+```elixir
+get_result = fn ->
+  receive do
+    {:query_result, result} -> result
+  end
+end
+```
+
+```elixir
+results = Enum.map(1..5, fn _ -> get_result.() end)
+```
+
+## Server process
+
+A server process is an informal name for a process that runs for a long time (or forever) and can handle various requests (messages). o make a process run forever, you have to use endless tail recursion.
+
+```elixir
+defmodule DatabaseServer do
+  # * Interface Functions
+
+  def start do
+    spawn(&loop/0)
+  end
+
+  def run_async(server_pid, query_def) do
+    send(server_pid, {:run_query, self(), query_def})
+  end
+
+  def get_result do
+    receive do
+      {:query_result, result} -> result
+    after
+      5000 -> {:error, :timeout}
+    end
+  end
+
+  # * Implementation Functions
+
+  defp loop do
+    receive do
+      {:run_query, caller, query_def} ->
+        send(caller, {:query_result, run_query(query_def)})
+    end
+
+    loop()
+  end
+
+  defp run_query(query_def) do
+    Process.sleep(2000)
+    "#{query_def} result"
+  end
+end
+```
+
+This loop isn’t CPU-intensive. Waiting for a message puts the process in a suspended state and doesn’t waste CPU cycles.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Notice that functions in this module run in different processes. The function start/0 is called by clients and runs in a client process. The private function loop/0 runs in the server process. It’s perfectly normal to have different functions from the same module running in different processes — there’s no special relationship between modules and processes. A module is just a collection of functions, and these functions can be invoked in any process.
+
+```elixir
+server_pid = DatabaseServer.start()
+```
+
+```elixir
+DatabaseServer.run_async(server_pid, "query 1")
+DatabaseServer.get_result()
+```
+
+```elixir
+DatabaseServer.run_async(server_pid, "query 2")
+DatabaseServer.get_result()
+```
