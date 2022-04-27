@@ -177,3 +177,57 @@ DatabaseServer.get_result()
 DatabaseServer.run_async(server_pid, "query 2")
 DatabaseServer.get_result()
 ```
+
+## Server process are sequential
+
+It’s important to realize that a server process is internally sequential. It runs a loop that processes one message at a time. Thus, if you issue five asynchronous query requests to a single server process, they will be handled one by one, and the result of the last query will come after 10 seconds.
+
+<!-- livebook:{"break_markdown":true} -->
+
+If you need to run in parallel, you can run multiple processes and balance the messages to thoses processes already created
+
+```elixir
+pool = Enum.map(1..100, fn _ -> DatabaseServer.start() end)
+```
+
+Here you create 100 database-server processes and store their pids in a list. You may think that 100 processes is a lot, but recall that processes are lightweight. They take up a small amount of memory (~2 KB) and are created very quickly (in a few microseconds). Furthermore, because all of these processes wait for a message, they’re effectively idle and don’t waste CPU time.
+
+<!-- livebook:{"break_markdown":true} -->
+
+To run a query you need to get a process randomly. This is not efficient at all, but will be getting this done.
+
+```elixir
+Enum.each(
+  1..5,
+  fn query_def ->
+    server_pid = Enum.at(pool, :rand.uniform(100) - 1)
+    DatabaseServer.run_async(server_pid, query_def)
+  end
+)
+```
+
+```elixir
+Enum.map(1..5, fn _ -> DatabaseServer.get_result() end)
+```
+
+## Keeping a process state
+
+To keep some state during the process loop, just pass the argument to function loop and keep on it.
+
+<!-- livebook:{"break_markdown":true} -->
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+def start do
+  spawn(fn ->
+    initial_state = State.new()   
+    loop(initial_state) # initialize state    
+  end)
+end
+
+defp loop(state) do # Receive state 
+  ...
+  loop(state) # Keep state on loop
+end
+```
