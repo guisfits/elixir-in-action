@@ -231,3 +231,164 @@ defp loop(state) do # Receive state
   loop(state) # Keep state on loop
 end
 ```
+
+## Complex state
+
+```elixir
+defmodule TodoList do
+  defstruct auto_id: 1, entries: %{}
+
+  def new(entries \\ []) do
+    Enum.reduce(
+      entries,
+      %TodoList{},
+      fn entry, todo_list_acc ->
+        add_entry(todo_list_acc, entry)
+      end
+    )
+  end
+
+  def add_entry(todo_list, entry) do
+    entry = Map.put(entry, :id, todo_list.auto_id)
+
+    new_entries =
+      Map.put(
+        todo_list.entries,
+        todo_list.auto_id,
+        entry
+      )
+
+    %TodoList{todo_list | entries: new_entries, auto_id: todo_list.auto_id + 1}
+  end
+
+  def entries(todo_list, date) do
+    todo_list.entries
+    |> Stream.filter(fn {_, entry} -> entry.date == date end)
+    |> Enum.map(fn {_, entry} -> entry end)
+  end
+
+  def update_entry(todo_list, entry_id, updater_fun) do
+    case Map.fetch(todo_list.entries, entry_id) do
+      :error ->
+        todo_list
+
+      {:ok, old_entry} ->
+        old_entry_id = old_entry.id
+        new_entry = %{id: ^old_entry_id} = updater_fun.(old_entry)
+        new_entries = Map.put(todo_list.entries, new_entry.id, new_entry)
+        %TodoList{todo_list | entries: new_entries}
+    end
+  end
+
+  def delete_entry(todo_list, entry_id) do
+    new_entries = Map.delete(todo_list.entries, entry_id)
+    %TodoList{todo_list | entries: new_entries}
+  end
+end
+```
+
+```elixir
+defmodule TodoServer do
+  # API 
+
+  def start do
+    spawn(fn -> loop(TodoList.new()) end)
+  end
+
+  def add_entry(todo_server, new_entry) do
+    send(todo_server, {:add_entry, new_entry})
+  end
+
+  def entries(todo_server, date) do
+    send(todo_server, {:entries, self(), date})
+
+    receive do
+      {:todo_entries, entries} -> entries
+    after
+      5000 -> {:error, :timeout}
+    end
+  end
+
+  def update_entry(todo_server, id, update_fn) do
+    send(todo_server, {:update_entry, id, update_fn})
+  end
+
+  def delete_entry(todo_server, id) do
+    send(todo_server, {:delete_entry, id})
+  end
+
+  # Callbacks
+
+  defp loop(todo_list) do
+    new_todo_list =
+      receive do
+        message -> process_message(todo_list, message)
+      end
+
+    loop(new_todo_list)
+  end
+
+  defp process_message(todo_list, {:add_entry, new_entry}) do
+    TodoList.add_entry(todo_list, new_entry)
+  end
+
+  defp process_message(todo_list, {:entries, caller, date}) do
+    # Sends the response to the caller
+    send(caller, {:todo_entries, TodoList.entries(todo_list, date)})
+    # The state remains unchanged.
+    todo_list
+  end
+
+  defp process_message(todo_list, {:update_entry, id, update_fn}) do
+    TodoList.update_entry(todo_list, id, update_fn)
+  end
+
+  defp process_message(todo_list, {:delete_entry, id}) do
+    TodoList.delete_entry(todo_list, id)
+  end
+end
+```
+
+### CONCURRENCY VS FUNCTIONAL APPROACH
+
+A process that keeps mutable state can be regarded as a kind of mutable data structure. You can start the server and then perform various requests on it. But you shouldn't abuse processes to avoid using the functional approach of transforming immutable data.
+
+The data should be modeled using pure functional abstractions, just as you did with TodoList. A pure functional data structure provides many benefits, such as integrity and atomicity. Furthermore, it can be reused in various contexts and tested independently.
+
+## Registered processes
+
+To processes communicate each other, they must to know the `pid`. A `pid` is a _process identifier_ that tell us the address of the process. You can given a name to this process to and call it with this name.
+
+```elixir
+Process.register(self(), :some_name)
+```
+
+```elixir
+send(:some_name, :msg)
+```
+
+```elixir
+receive do
+  msg -> IO.puts("received #{msg}")
+end
+```
+
+Processes names must follow some rules
+
+* The name can only be an atom.
+* A single process can have only one name.
+* Two processes can’t have the same name.
+
+## Runtime considerations
+
+* Although multiple processes may run in parallel, a single process is always sequential — it either runs some code or waits for a message. If many processes send messages to a single process, that single process can significantly affect overall throughput.
+* The mailbox size is limited by available memory. Thus, if a process constantly falls behind, meaning messages arrive faster than the process can handle them, the mailbox will constantly grow and increasingly consume memory. Ultimately, a single slow process may cause an entire system to crash by consuming all the available memory.
+* As already mentioned, processes share no memory. Thus, sending a message to another process results in a deep copy of the message contents. having many processes frequently send big messages may affect system performance. The notion of small versus big is subjective. Simple data, such as a number, an atom, or a tuple with few elements, is obviously small. A list of a million complex structures is big. The border lies somewhere in between and depends on your specific case.
+* Each BEAM scheduler is in reality an OS thread that manages the execution of BEAM processes. By default, BEAM uses only as many schedulers as there are logical processors available.
+
+## Summary
+
+* A BEAM process is a lightweight concurrent unit of execution. Processes are completely isolated and share no memory.
+* Processes can communicate with asynchronous messages. Synchronous sends and responses are manually built on top of this basic mechanism.
+* A server process is a process that runs for a long time (possibly forever) and handles various messages. Server processes are powered by endless recursion.
+* Server processes can maintain their own private state using the arguments of the endless recursion.
