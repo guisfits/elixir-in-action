@@ -1,4 +1,4 @@
-# 05_Concurrency-primitives
+# 05. Concurrency Primitives
 
 ## Concurrency in Beam
 

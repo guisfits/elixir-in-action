@@ -333,5 +333,3 @@ HighOrderFunctions.Practicing.longest_line!(path) |> IO.inspect()
 IO.puts("\nwords_per_line/1: ")
 HighOrderFunctions.Practicing.words_per_line!(path)
 ```
-
-
