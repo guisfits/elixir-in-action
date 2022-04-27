@@ -1,0 +1,7 @@
+# 06. Generic Server Processes
+
+## Intro
+
+```elixir
+
+```
