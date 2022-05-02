@@ -20,3 +20,110 @@ The `use` macro is a language feature you haven't seen previously. During compil
 <!-- livebook:{"break_markdown":true} -->
 
 * First, `GenServer.start/2` works synchronously. In other words, `start/2` returns only after the `init/1` callback has finished in the server process. Consequently, the client process that starts the server is blocked until the server process is initialized.
+
+## Stopping the server
+
+In `init/1`, you can decide against starting the server. In this case, you can either return `{:stop, reason}` or `:ignore`. In both cases, the server won't proceed with the loop, and will instead terminate.
+
+If `init/1` returns `{:stop, reason}`, the result of `start/2` will be `{:error, reason}`. In contrast, if `init/1` returns `:ignore`, the result of `start/2` will also be `:ignore`. The difference between these two return values is in their intention. You should opt for `{:stop, reason}` when you can't proceed further due to some error. In contrast, `:ignore` should be used when stopping the server is the normal course of action.
+
+Returning `{:stop, reason, new_state}` from `handle_*` callbacks causes `GenServer` to stop the server process. If the termination is part of the standard workflow, you should use the atom `:normal` as the stoppage reason. If you're in `handle_call/3` and also need to respond to the caller before terminating, you can return `{:stop, reason, response, new_state}`.
+
+You may wonder why you need to return a new state if yo're terminating the process. The reason is that just before the termination, `GenServer` calls the callback function `terminate/2`, sending it the termination reason and the final state of the process. This can be useful if you need to perform cleanup.
+
+Finally, you can also stop the server process by invoking `GenServer.stop/3` from the client process. This invocation will issue a synchronous request to the server. The behaviour will handle the stop request itself by stopping the server process.
+
+## To Do
+
+```elixir
+defmodule TodoList do
+  defstruct auto_id: 1, entries: %{}
+
+  def new(entries \\ []) do
+    Enum.reduce(
+      entries,
+      %TodoList{},
+      &add_entry(&2, &1)
+    )
+  end
+
+  def add_entry(todo_list, entry) do
+    entry = Map.put(entry, :id, todo_list.auto_id)
+    new_entries = Map.put(todo_list.entries, todo_list.auto_id, entry)
+
+    %TodoList{todo_list | entries: new_entries, auto_id: todo_list.auto_id + 1}
+  end
+
+  def entries(todo_list, date) do
+    todo_list.entries
+    |> Stream.filter(fn {_, entry} -> entry.date == date end)
+    |> Enum.map(fn {_, entry} -> entry end)
+  end
+
+  def update_entry(todo_list, %{} = new_entry) do
+    update_entry(todo_list, new_entry.id, fn _ -> new_entry end)
+  end
+
+  def update_entry(todo_list, entry_id, updater_fun) do
+    case Map.fetch(todo_list.entries, entry_id) do
+      :error ->
+        todo_list
+
+      {:ok, old_entry} ->
+        new_entry = updater_fun.(old_entry)
+        new_entries = Map.put(todo_list.entries, new_entry.id, new_entry)
+        %TodoList{todo_list | entries: new_entries}
+    end
+  end
+
+  def delete_entry(todo_list, entry_id) do
+    %TodoList{todo_list | entries: Map.delete(todo_list.entries, entry_id)}
+  end
+end
+```
+
+```elixir
+defmodule TodoServer do
+  use GenServer
+
+  def start do
+    GenServer.start(TodoServer, nil)
+  end
+
+  def add_entry(todo_server, new_entry) do
+    GenServer.cast(todo_server, {:add_entry, new_entry})
+  end
+
+  def entries(todo_server, date) do
+    GenServer.call(todo_server, {:entries, date})
+  end
+
+  def update_entry(todo_server, entry_id, update_fn)
+
+  @impl GenServer
+  def init(_) do
+    {:ok, TodoList.new()}
+  end
+
+  @impl GenServer
+  def handle_cast({:add_entry, new_entry}, todo_list) do
+    new_state = TodoList.add_entry(todo_list, new_entry)
+    {:noreply, new_state}
+  end
+
+  @impl GenServer
+  def handle_cast({:update, new_entry}, todo_list) do
+    new_state = TodoList.add_entry(todo_list, new_entry)
+    {:noreply, new_state}
+  end
+
+  @impl GenServer
+  def handle_call({:entries, date}, _, todo_list) do
+    {
+      :reply,
+      TodoList.entries(todo_list, date),
+      todo_list
+    }
+  end
+end
+```
