@@ -319,13 +319,13 @@ defmodule TodoServer do
 
   # Callbacks
 
-  defp loop(todo_list) do
+  defp loop(todo_list, state) do
     new_todo_list =
       receive do
         message -> process_message(todo_list, message)
       end
 
-    loop(new_todo_list)
+    loop(new_todo_list, state)
   end
 
   defp process_message(todo_list, {:add_entry, new_entry}) do
