@@ -1,10 +1,10 @@
-defmodule V2.TodoList.CsvImporter do
+defmodule TodoList.CsvImporter do
   def import(path) do
     File.stream!(path)
     |> Stream.map(&remove_breakline/1)
     |> Stream.map(&convert_to_tuple/1)
     |> Enum.map(&create_entry/1)
-    |> V2.TodoList.new()
+    |> TodoList.new()
   end
 
   defp remove_breakline(line) do

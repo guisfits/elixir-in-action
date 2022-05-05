@@ -1,7 +1,7 @@
-defmodule V2.TodoListTest do
+defmodule TodoListTest do
   use ExUnit.Case, async: true
 
-  alias V2.TodoList
+  alias TodoList
 
   describe "new/1" do
     test "when no entries are provided, should return a new empty TodoList" do
@@ -9,7 +9,7 @@ defmodule V2.TodoListTest do
       todo_list = TodoList.new()
 
       # assert
-      assert todo_list == %V2.TodoList{auto_id: 1, entries: %{}}
+      assert todo_list == %TodoList{auto_id: 1, entries: %{}}
     end
 
     test "when entries are provided, should return a new TodoList with the entries" do

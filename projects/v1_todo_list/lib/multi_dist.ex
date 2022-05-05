@@ -1,4 +1,4 @@
-defmodule V1.Multidict do
+defmodule Multidict do
   def new(), do: %{}
 
   def add(dict, key, value) do

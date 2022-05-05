@@ -1,6 +1,6 @@
-defmodule V1.TodoListTest do
+defmodule TodoListTest do
   use ExUnit.Case
-  alias V1.TodoList
+  alias TodoList
 
   describe "new/0" do
     test "should return a new map" do

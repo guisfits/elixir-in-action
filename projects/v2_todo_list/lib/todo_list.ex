@@ -1,10 +1,10 @@
-defmodule V2.TodoList do
+defmodule TodoList do
   defstruct auto_id: 1, entries: %{}
 
   def new(entries \\ []) do
     Enum.reduce(
       entries,
-      %V2.TodoList{},
+      %TodoList{},
       fn entry, todo_list_acc ->
         add_entry(todo_list_acc, entry)
       end
@@ -21,7 +21,7 @@ defmodule V2.TodoList do
         entry
       )
 
-    %V2.TodoList{todo_list | entries: new_entries, auto_id: todo_list.auto_id + 1}
+    %TodoList{todo_list | entries: new_entries, auto_id: todo_list.auto_id + 1}
   end
 
   def entries(todo_list, date) do
@@ -39,12 +39,12 @@ defmodule V2.TodoList do
         old_entry_id = old_entry.id
         new_entry = %{id: ^old_entry_id} = updater_fun.(old_entry)
         new_entries = Map.put(todo_list.entries, new_entry.id, new_entry)
-        %V2.TodoList{todo_list | entries: new_entries}
+        %TodoList{todo_list | entries: new_entries}
     end
   end
 
   def delete_entry(todo_list, entry_id) do
     new_entries = Map.delete(todo_list.entries, entry_id)
-    %V2.TodoList{todo_list | entries: new_entries}
+    %TodoList{todo_list | entries: new_entries}
   end
 end

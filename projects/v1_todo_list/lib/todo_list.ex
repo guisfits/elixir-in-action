@@ -1,6 +1,6 @@
-defmodule V1.TodoList do
-  alias V1.Multidict
-  
+defmodule TodoList do
+  alias Multidict
+
   def new(), do: Multidict.new()
 
   def add_entry(todo_list, entry) do
