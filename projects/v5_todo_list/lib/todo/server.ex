@@ -20,25 +20,17 @@ defmodule Todo.Server do
 
   @impl GenServer
   def handle_cast({:add_entry, new_entry}, {name, todo_list}) do
-    new_state = Todo.List.add_entry(todo_list, new_entry)
-    Todo.Database.store(name, new_state)
-
-    {:noreply, {name, new_state}}
-  end
-
-  @impl GenServer
-  def handle_cast({:update, new_entry}, {name, todo_list}) do
-    new_state = Todo.List.add_entry(todo_list, new_entry)
-    Todo.Database.store(name, new_state)
-
-    {:noreply, {name, new_state}}
+    new_list = Todo.List.add_entry(todo_list, new_entry)
+    Todo.Database.store(name, new_list)
+    {:noreply, {name, new_list}}
   end
 
   @impl GenServer
   def handle_call({:entries, date}, _, {name, todo_list}) do
-    data = Todo.Database.get(name)
-    |> Todo.List.entries(date)
-
-    { :reply, data, {name, todo_list}}
+    {
+      :reply,
+      Todo.List.entries(todo_list, date),
+      {name, todo_list}
+    }
   end
 end
