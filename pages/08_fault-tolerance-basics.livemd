@@ -1,0 +1,118 @@
+# 08 Fault-tolerance basics
+
+## Intro
+
+Elixir part of premise that everything can be fail. The design of the languange and runtime provides tools to handle this errors as a natural thing. Each process in Elixir is isolete from others, so, if one process failed, others process has no affected. Elixir has the philosofy  of "let them crash", with this in mind, let's see how it's works.
+
+## Runtime errors
+
+One of the most common examples is a failed pattern match. If a match fails, an error is raised. Another example is a synchronous `GenServer.call`. If the response message does'’t arrive in a given time interval (five seconds by default), a runtime error happens
+
+When a runtime error happens, execution control is transferred up the call stack to the error-handling code. If you didn't specify such code, the process where the error happened is terminated. All other processes by default run unaffected. Of course, there are means to intercept and handle errors, and these resemble the familiar `try-catch` constructs you probably know from other languages.
+
+## Errors types
+
+BEAM distinguishes three types of runtime errors: _errors_, _exits_, and _throws_. Here are some typical examples of errors:
+
+If your function explicitly raises an error, you should append the `!` character to its name. This is a convention used in Elixir standard libraries. For example, `File.open!` raises an error if a file can't be opened
+
+Another type of error is the exit, which is used to deliberately terminate a process. To exit the current process, you can call exit/1, providing an exit reason
+
+```elixir
+spawn(fn ->
+  exit("I'm done")
+  IO.puts("This doesn't happen")
+end)
+```
+
+## Handling errors
+
+```elixir
+try_helper = fn fun ->
+  try do
+    fun.()
+    IO.puts("No error.")
+  catch
+    type, value ->
+      IO.puts("Error\n  #{inspect(type)}\n  #{inspect(value)}")
+  end
+end
+```
+
+```elixir
+try_helper.(fn -> raise("Something went wrong") end)
+```
+
+```elixir
+try_helper.(fn -> throw("Throw value") end)
+```
+
+```elixir
+try_helper.(fn -> exit("I'm done") end)
+```
+
+Remember that in Elixir, everything is an expression that has a return value. With `try`, the return value is the result of the last executed statement — either from the `do` block or, if an error was raised, from the `catch` block:
+
+```elixir
+result =
+  try do
+    throw("Thrown value")
+  catch
+    type, value ->
+      {type, value}
+  end
+```
+
+## Errors in concurrent systems
+
+Concurrency plays a central role in building fault-tolerant, BEAM-based systems. This is due to the total isolation and independence of individual processes. A crash in one process won’t affect the others (unless you explicitly want it to).
+
+```elixir
+spawn(fn ->
+  spawn(fn ->
+    Process.sleep(1000)
+    IO.puts("Process 2 finished")
+  end)
+
+  raise("Something went wrong")
+end)
+```
+
+As you can see, the execution of process 2 goes on despite the fact that process 1 crashes. Information about the crash of process 1 is printed to the screen, but the rest of the system — including process 2 and the `iex` shell prompt — runs normally.
+
+a normal termination (when the spawned function has finished), the exit reason is the atom `:normal`. By default, when a process receives an exit signal from another process, and that signal is anything other than `:normal`, the linked process terminates as well. In other words, when a process terminates abnormally, the linked process is also taken down.
+
+```elixir
+spawn(fn ->
+  spawn_link(fn ->
+    Process.sleep(1000)
+    IO.puts("Process 2 finished")
+  end)
+
+  raise("Something went wrong")
+end)
+```
+
+Usually you don’t want a linked process to crash. Instead, you want to detect the process crash and do something about it. This can be done by trapping exits. When a process is trapping exits, it isn’t taken down when a linked process crashes. Instead, an exit signal is placed in the surviving process’s message queue, in the form of a standard message. A trapping process can receive these messages and do something about the crash.
+
+```elixir
+spawn(fn ->
+  Process.flag(:trap_exit, true)
+
+  spawn_link(fn -> raise("Something went wrong") end)
+
+  receive do
+    msg -> IO.inspect(msg)
+  end
+end)
+```
+
+links are always bidirectional. Most of the time, this is exactly what you need, but in some cases unidirectional propagation of a process crash works better. Sometimes you need to connect two processes, A and B, in such a way that process A is notified when B terminates, but not the other way around. In such cases, you can use a monitor, which is something like a unidirectional link.
+
+```elixir
+monitor_ref = Process.monitor(target_pid)
+```
+
+When you issue a synchronous request via `GenServer.call`, if a server process crashes, an exit signal will occur in your client process. This is a simple but very important example of cross-process error propagation. Internally, `GenServer` sets up a temporary monitor that targets the server process. While waiting for a response from the server, if a `:DOWN` message is received, `GenServer` can detect that a process has crashed and raise a corresponding exit signal in the client process.
+
+## Supervisors
