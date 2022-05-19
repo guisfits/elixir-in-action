@@ -4,6 +4,7 @@ defmodule Todo.Cache do
   # * Interfaces
 
   def start_link(_) do
+    IO.puts("Starting to-do cache")
     GenServer.start_link(__MODULE__, :no_args, name: __MODULE__)
   end
 

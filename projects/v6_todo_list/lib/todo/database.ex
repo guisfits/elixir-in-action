@@ -6,6 +6,7 @@ defmodule Todo.Database do
   # * Interfaces
 
   def start do
+    IO.puts("Starting database")
     GenServer.start(__MODULE__, nil, name: __MODULE__)
   end
 
