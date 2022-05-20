@@ -5,7 +5,7 @@ defmodule Todo.Cache.Test do
   describe "server_process/2" do
     test "Given a name, should attach it to some Todo.Server pid" do
       # arrange
-      {:ok, cache} = Todo.Cache.start()
+      {:ok, cache} = Todo.Cache.start_link()
 
       # act
       guilherme_pid = Todo.Cache.server_process(cache, "guilherme")
@@ -17,7 +17,7 @@ defmodule Todo.Cache.Test do
 
     test "Given a Todo.Server pid, Should do all Todo.List operations" do
       # arrange
-      {:ok, cache} = Todo.Cache.start()
+      {:ok, cache} = Todo.Cache.start_link()
       alice = Todo.Cache.server_process(cache, "alice")
 
       # act
