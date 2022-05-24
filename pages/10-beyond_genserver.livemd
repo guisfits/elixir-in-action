@@ -1,0 +1,108 @@
+# 10. Beyond GenServer
+
+## Tasks
+
+The Task module can be used to concurrently run a job — a process that takes some input, performs some computation, and then stops.
+
+## Awaited task
+
+An awaited task is a process that executes some function, sends the function result back to the starter process, and then terminates.
+
+```elixir
+run_query = fn query_def ->
+  Process.sleep(2000)
+  "#{query_def} result"
+end
+```
+
+```elixir
+1..5
+|> Enum.map(&Task.async(fn -> run_query.("query #{&1}") end))
+|> Enum.map(&Task.await/1)
+```
+
+It should be noted that Task.async/1 links the new task to the starter process. Therefore, if any task process crashes, the starter process will crash too (unless it's trapping exits). The crash of the starter process will, in turn, cause all the other tasks started by the same process to crash. In other words, starting multiple tasks with Task.async/1 has all-or-nothing semantics. The crash of a single task takes down all other tasks as well as the starter process.
+
+## Non-awaited tasks
+
+Sometimes you don't want to send the result message back to the starter process. For example, let's say that when handling a web request you start a longer-running task that communicates with the payment gateway. You could start the task and immediately respond to the user that the request has been accepted. Once the task is done, the server would issue a notification about the outcome, perhaps via WebSocket or an email. Or suppose a task needs to produce a side effect, such as a database update, without notifying the starter process. In either scenario, the starter process doesn't need to be notified about the task's outcome.
+
+```elixir
+Task.start_link(fn ->
+  Process.sleep(1000)
+  IO.puts("Hello from task")
+end)
+```
+
+```elixir
+defmodule Todo.Metrics
+  use Task
+
+  def start_link(_arg), do: Task.start_link(&loop/0)
+
+  defp loop() do
+    Process.sleep(:timer.seconds(10))
+    IO.inspect(collect_metrics())
+    loop()
+  end
+
+  defp collect_metrics() do
+    [
+      memory_usage: :erlang.memory(:total)
+      process_count: :erlang.system_info(:process_count)
+    ]
+  end
+end
+```
+
+The `Todo.Metrics` module is ready to be injected into the supervision tree, as shown in the following listing.
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+defmodule Todo.System do
+  def start_link do
+    Supervisor.start_link(
+      [
+        Todo.Metrics,
+        ...
+      ],
+      strategy: :one_for_one
+    )
+  end
+end
+```
+
+This is the main purpose of `Task.start_link/1` — it allows you to start an OTP-compliant process that you can safely start as a child of some supervisor.
+
+## Agents
+
+The **Agent** module provides an abstraction that's similar to **GenServer**. **Agents** require a bit less ceremony and can therefore eliminate some boilerplate associated with **GenServers**. On the flip side, **Agent** doesn't support all the scenarios that **GenServer** does. As a mechanical rule, if a GenServer-powered module implements only `init/1`, `handle_cast/2`, and `handle_call/3`, it can be replaced with an Agent. But if you need to use `handle_info/2` or `terminate/1`, **Agent** won't suffice, and you'll need to use **GenServer**.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Start Agent with some state:
+
+```elixir
+{:ok, pid} = Agent.start_link(fn -> %{name: "Bob", age: 30} end)
+```
+
+Get value from Agent
+
+```elixir
+Agent.get(pid, fn state -> state.name end)
+```
+
+To update agent's state:
+
+```elixir
+Agent.update(pid, fn state -> %{state | age: state.age + 1} end)
+```
+
+```elixir
+Agent.get(pid, fn state -> state end)
+```
+
+## Agents and concurrency
+
+An agent process works exactly like a GenServer. If multiple clients try to work with the same agent at the same time, the operations will be serialized and executed one by one. In fact, the Agent module is implemented in plain Elixir on top of GenServer.
