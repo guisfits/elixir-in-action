@@ -106,3 +106,106 @@ Agent.get(pid, fn state -> state end)
 ## Agents and concurrency
 
 An agent process works exactly like a GenServer. If multiple clients try to work with the same agent at the same time, the operations will be serialized and executed one by one. In fact, the Agent module is implemented in plain Elixir on top of GenServer.
+
+## ETS tables
+
+When you have to many process depending one single process, this process will be a _bottleneck_. As process is a syncronious operation, to many request into it will be getting the system lazy. The problem isn't the many processes running in the system, but the single process on which many other processes depend. In this particular scenario, you can do much better with ETS tables, so let's see what they are and how you can work with them.
+
+<!-- livebook:{"break_markdown":true} -->
+
+ETS table is a separate memory-data structure where you can store Erlang terms. terms. This makes it possible to share the system-wide state without introducing a dedicated server process. The data is kept in an ETS table — a dynamic memory structure where you can store tuples.
+
+* There's no specific ETS data type. A table is identified by its ID (a reference type) or a global name (an atom).
+* ETS tables are mutable. A write to a table will affect subsequent read operations.
+* Multiple processes can write to or read from a single ETS table. Writes and reads are concurrent.
+* Minimum isolation is ensured. Multiple processes can safely write to the same row of the same table. The last write wins.
+* An ETS table resides in a separate memory space. Any data coming in or out is deep-copied.
+* ETS doesn't put pressure on the garbage collector. Overwritten or deleted data is immediately released.
+* An ETS table is deeply connected to its owner process (by default, the process that created the table). If the owner process terminates, the ETS table is reclaimed.
+* Other than on owner-process termination, there's no automatic garbage collection of an ETS table. Even if you don't hold a reference to the table, it still occupies memory.
+
+```elixir
+table = :ets.new(:my_table, []
+```
+
+```elixir
+:ets.insert(table, {:key_1, 1})
+:ets.insert(table, {:key_2, 2})
+:ets.insert(table, {:key_3, 3})
+```
+
+```elixir
+:ets.lookup(table, :key_2)
+```
+
+You may wonder why the list is returned if you can have only one row per distinct key. The reason is that ETS tables support other table types, some of which allow duplicate rows. In particular, the following table types are possible:
+
+* `:set` — The default. One row per distinct key is allowed.
+* `:ordered_set` — Just like :set, but rows are in term order (comparison via the < and > operators).
+* `:bag` — Multiple rows with the same key are allowed, but two rows can't be completely identical.
+* `:duplicate_bag` — Just like :bag, but allows duplicate rows.
+
+Another important option is the table's access permissions. The following values are possible:
+
+* `:protected` — The default. The owner process can read from and write to the table. All other processes can read from the table.
+* `:public` — All processes can read from and write to the table.
+* `:private` — Only the owner process can access the table.
+
+```elixir
+:ets.new(:some_table, [:public, :duplicate_bag])
+```
+
+Finally, it's worth discussing the table name. This argument must be an atom, and by default it serves no purpose (although, strangely enough, you must still provide it). You can create multiple tables with the same name, and they're still different tables.   
+But if you provide a :named_table option, the table becomes accessible via its name:
+
+```elixir
+:ets.new(:my_table3, [:named_table])
+```
+
+```elixir
+:ets.insert(:my_table3, {:key_1, 3})
+:ets.lookup(:my_table3, :key_1)
+```
+
+```elixir
+defmodule EtsKeyValue do
+  use GenServer
+
+  def start_link do
+    GenServer.start(__MODULE__, nil, name: __MODULE__)
+  end
+
+  def init(_) do
+    :ets.new(
+      __MODULE__,
+      [:named_table, :public, write_concurrency: true]
+    )
+
+    {:ok, nil}
+  end
+
+  def put(key, value) do
+    :ets.insert(__MODULE__, {key, value})
+  end
+
+  def get(key) do
+    case :ets.lookup(__MODULE__, key) do
+      [{^key, value}] -> value
+      [] -> nil
+    end
+  end
+end
+```
+
+Notice the `:write_concurrency` option provided to `:ets.new`. This option allows you to issue concurrent writes to the table, which is exactly what you want in this case. There's also a `:read_concurrency` option, which can improve read performance in some cases. This option isn't set here, because the Bench module performs a lot of interleaved reads and writes, and in such cases :read_concurrency can lead to worse performance. Instead of randomly setting these options, it's always good to measure and observe their effects.
+
+```elixir
+EtsKeyValue.start_link()
+```
+
+```elixir
+EtsKeyValue.put(:some_key, :some_value)
+EtsKeyValue.get(:some_key)
+```
+
+You might wonder why GenServer is still used in the ETS-based key/value store. The sole purpose of this process is to keep the table alive. Remember, an ETS table is released from memory when the owner process terminates. Therefore, you need to have a distinct, long-running process that creates and owns the table.
