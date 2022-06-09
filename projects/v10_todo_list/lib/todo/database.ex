@@ -2,7 +2,7 @@ defmodule Todo.Database do
   def child_spec(_) do
     db_settings = Application.fetch_env!(:todo, :database)
     db_folder = Keyword.fetch!(db_settings, :folder)
-    pool_size = Keyword.fetch!(db_settings, :pool_size)
+    db_poolsize = Keyword.fetch!(db_settings, :pool_size)
 
     File.mkdir_p!(db_folder)
 
@@ -11,7 +11,7 @@ defmodule Todo.Database do
       [
         name: {:local, __MODULE__},
         worker_module: Todo.DatabaseWorker,
-        size: pool_size
+        size: db_poolsize
       ],
       [db_folder]
     )

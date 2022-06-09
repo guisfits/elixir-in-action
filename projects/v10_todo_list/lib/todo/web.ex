@@ -12,7 +12,7 @@ defmodule Todo.Web do
     )
   end
 
-  # http get http://localhost:5454/entries?list=bob&date=2020-06-09
+  # curl 'http://localhost:5454/entries?list=bob&date=2018-12-19'
   get "/entries" do
     conn = Plug.Conn.fetch_query_params(conn)
     list_name = Map.fetch!(conn.params, "list")
@@ -33,6 +33,7 @@ defmodule Todo.Web do
     |> Plug.Conn.send_resp(200, formatted_entries)
   end
 
+  # curl -d '' 'http://localhost:5454/add_entry?list=bob&date=2018-12-19&title=Dentist'
   post "/add_entry" do
     conn = Plug.Conn.fetch_query_params(conn)
     list_name = Map.fetch!(conn.params, "list")
