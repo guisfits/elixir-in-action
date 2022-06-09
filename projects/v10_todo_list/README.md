@@ -10,7 +10,7 @@ by adding `todo_list` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:todo_list, "~> 0.1.0"}
+    {:todo, "~> 0.1.0"}
   ]
 end
 ```
