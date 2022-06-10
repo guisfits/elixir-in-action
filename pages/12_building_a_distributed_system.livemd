@@ -1,0 +1,114 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# 12 - Building a distributed system
+
+## Distribution primitives
+
+BEAM-powered distributed systems are built by connecting multiple nodes into a cluster. A node is a BEAM instance that has a name associated with it.
+
+You can start multiple nodes on the same host machine or on different machines, and you can connect those nodes. Once the nodes are connected, you can communicate between different processes on different nodes by relying on the familiar message-passing mechanism.
+
+Starting a node can be as simple as using the --sname parameter while starting the shell:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+iex --sname node1@localhost
+```
+
+## Connecting Nodes
+
+Start another node
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+iex --sname node1@localhost
+```
+
+Inside iex, you can connect both
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+Node.connect(:node1@localhost)
+```
+
+It's of course possible to connect multiple nodes. In fact, BEAM by default tries to establish a fully connected cluster. If you start a third node, node3, and connect it to node2, a connection is established to all other nodes that node2 is connected to
+
+<!-- livebook:{"break_markdown":true} -->
+
+Once you have some nodes started and connected, you can make them cooperate. A simple way to try this is to use Node.spawn/2, which receives a node name (an atom) and a lambda. The function then spawns a new process on the target node and runs the lambda in that process.
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+Node.spawn(
+  :node2@localhost,  
+  fn -> IO.puts("Hello from #{node}") end
+)
+```
+
+## Local registration
+
+Avoid spawning lambdas or sending them to different nodes. Lambdas that are defined in module functions can be spawned remotely (or sent to a remote node via a message) only if both nodes are powered by exactly the same compiled code. It's generally better to avoid passing lambdas to a remote node. Instead, you should use the Node.spawn/4 function, which accepts an MFA (module, function, arguments list) that identifies a function to be invoked on the target node.
+
+In a multinode environment, the term “local registration” finally starts to make sense. When you register a process locally, the scope of registration is only the current node. This means you can use the same registered name on different nodes
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+(node1)> Process.register(self(), :banana)
+```
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+(node2)> Process.register(self(), :banana)
+```
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+(node1)> send({:banana, :node2@localhost}, "Hello from node1")
+```
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+(node2)> flush()
+"Hello from node1"
+```
+
+## Global registration
+
+The simplest way to do cluster-wide discovery is to use the `:global module` (http://erlang.org/doc/man/global.html), which provides a global name registration facility. For example, if you run the to-do system as a multinode cluster, you may want to run exactly one process per single to-do list
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+(node1) > :global.register_name({:todo_list, "bob"}, self())
+:yes
+```
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+(node2) > :global.register_name({:todo_list, "bob"}, self())
+:no
+```
+
+When you attempt to register a global alias, a cluster-wide lock is set, preventing any competing registration on other nodes. Then a check is performed to see whether the alias is already registered. If not, all nodes are informed about the new registration. Finally, the lock is released.
+
+You can use :global.whereis_name/1 to find the process:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+(node2) > :global.whereis_name({:todo_list, "bob"}, self())
+#PID<7954.90.0>
+```
+
+Note that lookups are local. When a registration is being performed, all nodes are contacted, and they cache the registration information in their local ETS tables. Each subsequent lookup on any node is performed on that node, without any additional chatter. This means a lookup can be performed quickly, whereas registration requires chatting between nodes.
+
+If a registered process crashes or the owner node disconnects, the alias is automatically unregistered on all other machines.
