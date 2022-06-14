@@ -112,3 +112,32 @@ You can use :global.whereis_name/1 to find the process:
 Note that lookups are local. When a registration is being performed, all nodes are contacted, and they cache the registration information in their local ETS tables. Each subsequent lookup on any node is performed on that node, without any additional chatter. This means a lookup can be performed quickly, whereas registration requires chatting between nodes.
 
 If a registered process crashes or the owner node disconnects, the alias is automatically unregistered on all other machines.
+
+## Groups of processes
+
+Is used to register multiple processes under the same alias. This may sound strange, but it's useful in situations where you want to categorize processes in a cluster and broadcast messages to all processes in a category. For example, in redundant clusters, you want to keep multiple copies of the same data. Having multiple copies allows you to survive node crashes. If one node terminates, a copy should exist somewhere else in the cluster.
+
+<!-- livebook:{"break_markdown":true} -->
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+(node1)> :pg2.start()
+(node1)> :pg2.create({:todo_list, "bob"})
+
+(node2)> :pg2.start()
+(node2)> :pg2.which_groups()
+[todo_list: "bob"]
+
+(node2)> :pg2.join({:todo_list, "bob"}, self())
+(node1)> :pg2.join({:todo_list, "bob"}, self())
+
+(node1)> :pg2.get_members({:todo_list, "bob"})
+[#PID<node1>, #PID<node2>]
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+When you want to make an update to Bob's to-do list, you can query the corresponding process group and get a list of all processes responsible for Bob's list. Then you can issue your request to all processes: for example, by using GenServer.multi_call/4. This ensures that all replicas in the cluster are updated.
+
+But when you need to issue a query (for example, to retrieve to-do list entries), you can do this on a single process from the group. Therefore, you can choose a single pid from the process group. For this purpose, you can use `:pg2.get_closest_pid/1`, which returns the pid of a local process, if one exists, or a random process from the group otherwise.
