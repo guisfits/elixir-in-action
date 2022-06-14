@@ -141,3 +141,10 @@ Is used to register multiple processes under the same alias. This may sound stra
 When you want to make an update to Bob's to-do list, you can query the corresponding process group and get a list of all processes responsible for Bob's list. Then you can issue your request to all processes: for example, by using GenServer.multi_call/4. This ensures that all replicas in the cluster are updated.
 
 But when you need to issue a query (for example, to retrieve to-do list entries), you can do this on a single process from the group. Therefore, you can choose a single pid from the process group. For this purpose, you can use `:pg2.get_closest_pid/1`, which returns the pid of a local process, if one exists, or a random process from the group otherwise.
+
+## Process Registration
+
+* The basic registration facility is a local registration that allows you to use a simple atom as an alias to the single process on a node.
+* `Registry` extends this by letting you use rich aliases — any term can be used as an alias.
+* `:global` allows you to register a cluster-wide alias.
+* `:pg2` is useful for registering multiple processes behind a cluster-wide alias (process group), which is usually suitable for distributed pub-sub scenarios.
